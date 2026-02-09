@@ -23,9 +23,12 @@ error() {
 
 # Проверка прав root
 if [ "$EUID" -ne 0 ]; then 
-    error "Пожалуйста, запустите скрипт с правами root (sudo)"
+    error "Пожалуйста, запустите скрипт с правами root (sudo или от root)"
     exit 1
 fi
+
+# Информация для пользователя
+info "Запуск от пользователя: $(whoami)"
 
 info "Удаление TorrServer STRM Sync сервиса"
 echo ""

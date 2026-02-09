@@ -62,12 +62,27 @@ sudo chmod +x /opt/torrserver/scripts/torrserver_strm_sync.py
 sudo ./install.sh
 ```
 
+**Для LXC контейнеров или если файл не имеет прав на выполнение:**
+
+```bash
+# Если вы уже root (в LXC контейнере)
+bash install.sh
+
+# Или дайте права на выполнение
+chmod +x install.sh
+./install.sh
+```
+
 Скрипт запросит:
 - Путь к директории скрипта (по умолчанию: `/opt/torrserver/scripts`)
 - URL TorrServer API (по умолчанию: `http://127.0.0.1:8090`)
 - Директорию для `.strm` файлов (по умолчанию: `/mnt/media/strm`)
 - Имя пользователя для systemd (по умолчанию: `torrserver`)
 - Опционально: логин и пароль для HTTP Basic Auth
+
+**Примечание для LXC контейнеров:**
+- Если вы уже работаете от root, используйте `bash install.sh` вместо `sudo ./install.sh`
+- Скрипт автоматически определит, что вы root, и пропустит проверку sudo
 
 ## Использование
 
@@ -219,15 +234,36 @@ http://127.0.0.1:8090/play/a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0/1
 
 ## Устранение неполадок
 
+### Permission denied при запуске install.sh
+
+Если вы получаете ошибку "Permission denied" при запуске скрипта:
+
+```bash
+# В LXC контейнере или если вы уже root
+bash install.sh
+
+# Или дайте права на выполнение
+chmod +x install.sh
+./install.sh
+```
+
 ### Сервис не запускается
 
 1. Проверьте логи:
 ```bash
+# Если вы root (LXC контейнер)
+journalctl -u torrserver-strm-sync -n 50
+
+# Или с sudo
 sudo journalctl -u torrserver-strm-sync -n 50
 ```
 
 2. Проверьте права доступа к директории вывода:
 ```bash
+# Если вы root
+chown -R torrserver:torrserver /mnt/media/strm
+
+# Или с sudo
 sudo chown -R torrserver:torrserver /mnt/media/strm
 ```
 
