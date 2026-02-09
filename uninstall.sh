@@ -67,45 +67,48 @@ read -p "Удалить скрипт и директорию установки?
 REMOVE_SCRIPT=${REMOVE_SCRIPT:-n}
 
 if [ "$REMOVE_SCRIPT" = "y" ] || [ "$REMOVE_SCRIPT" = "Y" ]; then
-    # Определение пути к скрипту из unit файла (если он еще существует)
+    # Определение пути к скрипту из unit файла
+    INSTALL_DIR=""
+    SCRIPT_PATH=""
+    
+    # Пытаемся прочитать из сохраненного unit файла перед удалением
     if [ -f "$SERVICE_FILE" ]; then
-        SCRIPT_PATH=$(grep "^ExecStart=" "$SERVICE_FILE" | sed 's/.*--api-url.*--output-dir.*python3 //' | awk '{print $1}')
+        # Извлекаем путь к скрипту из ExecStart
+        EXEC_LINE=$(grep "^ExecStart=" "$SERVICE_FILE" | cut -d'=' -f2-)
+        # Ищем путь к python скрипту (после python3)
+        SCRIPT_PATH=$(echo "$EXEC_LINE" | grep -oP '(?<=python3\s)[^\s]+' | head -1)
         if [ -n "$SCRIPT_PATH" ] && [ -f "$SCRIPT_PATH" ]; then
             INSTALL_DIR=$(dirname "$SCRIPT_PATH")
-            read -p "Удалить директорию $INSTALL_DIR? (y/n) [n]: " REMOVE_DIR
-            REMOVE_DIR=${REMOVE_DIR:-n}
-            
-            if [ "$REMOVE_DIR" = "y" ] || [ "$REMOVE_DIR" = "Y" ]; then
-                info "Удаление директории $INSTALL_DIR..."
-                rm -rf "$INSTALL_DIR"
-                info "Директория удалена"
-            else
-                info "Удаление только скрипта..."
+            info "Найден путь к скрипту: $SCRIPT_PATH"
+        fi
+    fi
+    
+    # Если не удалось определить автоматически, запрашиваем у пользователя
+    if [ -z "$INSTALL_DIR" ] || [ ! -d "$INSTALL_DIR" ]; then
+        read -p "Введите путь к директории со скриптом [/opt/torrserver/scripts]: " INSTALL_DIR
+        INSTALL_DIR=${INSTALL_DIR:-/opt/torrserver/scripts}
+        SCRIPT_PATH="$INSTALL_DIR/torrserver_strm_sync.py"
+    fi
+    
+    if [ -d "$INSTALL_DIR" ]; then
+        read -p "Удалить директорию $INSTALL_DIR? (y/n) [n]: " REMOVE_DIR
+        REMOVE_DIR=${REMOVE_DIR:-n}
+        
+        if [ "$REMOVE_DIR" = "y" ] || [ "$REMOVE_DIR" = "Y" ]; then
+            info "Удаление директории $INSTALL_DIR..."
+            rm -rf "$INSTALL_DIR"
+            info "Директория удалена"
+        else
+            info "Удаление только скрипта..."
+            if [ -f "$SCRIPT_PATH" ]; then
                 rm -f "$SCRIPT_PATH"
                 info "Скрипт удален"
+            else
+                warn "Скрипт не найден: $SCRIPT_PATH"
             fi
         fi
     else
-        # Запрос пути вручную
-        read -p "Введите путь к директории со скриптом [/opt/torrserver/scripts]: " INSTALL_DIR
-        INSTALL_DIR=${INSTALL_DIR:-/opt/torrserver/scripts}
-        
-        if [ -d "$INSTALL_DIR" ]; then
-            read -p "Удалить директорию $INSTALL_DIR? (y/n) [n]: " REMOVE_DIR
-            REMOVE_DIR=${REMOVE_DIR:-n}
-            
-            if [ "$REMOVE_DIR" = "y" ] || [ "$REMOVE_DIR" = "Y" ]; then
-                info "Удаление директории $INSTALL_DIR..."
-                rm -rf "$INSTALL_DIR"
-                info "Директория удалена"
-            else
-                info "Удаление только скрипта..."
-                rm -f "$INSTALL_DIR/torrserver_strm_sync.py"
-                info "Скрипт удален"
-            fi
-        else
-            warn "Директория $INSTALL_DIR не найдена"
-        fi
+        warn "Директория $INSTALL_DIR не найдена"
     fi
 else
     info "Скрипт оставлен на месте"
@@ -117,9 +120,12 @@ read -p "Удалить директорию с .strm файлами? (y/n) [n]:
 REMOVE_STRM_DIR=${REMOVE_STRM_DIR:-n}
 
 if [ "$REMOVE_STRM_DIR" = "y" ] || [ "$REMOVE_STRM_DIR" = "Y" ]; then
-    # Попытка определить путь из unit файла
+    # Попытка определить путь из unit файла (если он еще существует)
+    OUTPUT_DIR=""
     if [ -f "$SERVICE_FILE" ]; then
-        OUTPUT_DIR=$(grep "^ExecStart=" "$SERVICE_FILE" | sed 's/.*--output-dir //' | awk '{print $1}')
+        EXEC_LINE=$(grep "^ExecStart=" "$SERVICE_FILE" | cut -d'=' -f2-)
+        # Ищем --output-dir и следующий за ним путь
+        OUTPUT_DIR=$(echo "$EXEC_LINE" | grep -oP '(?<=--output-dir\s)[^\s]+' | head -1)
     fi
     
     if [ -z "$OUTPUT_DIR" ]; then

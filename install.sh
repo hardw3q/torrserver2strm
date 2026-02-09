@@ -47,10 +47,11 @@ if [ ! -f "$SERVICE_FILE" ]; then
 fi
 
 info "Установка TorrServer STRM Sync сервиса"
+info "Директория скрипта: $SCRIPT_DIR"
 echo ""
 
 # Запрос параметров
-read -p "Путь к директории скрипта [/opt/torrserver/scripts]: " INSTALL_DIR
+read -p "Путь для установки скрипта [/opt/torrserver/scripts]: " INSTALL_DIR
 INSTALL_DIR=${INSTALL_DIR:-/opt/torrserver/scripts}
 
 read -p "URL TorrServer API [http://127.0.0.1:8090]: " API_URL
