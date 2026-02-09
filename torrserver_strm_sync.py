@@ -173,10 +173,14 @@ def extract_files_from_data(data_value):
     return files if isinstance(files, list) else []
 
 
-def build_strm_entries(torrents):
+def build_strm_entries(torrents, base_url: str):
     """Построение структуры .strm файлов из списка торрентов"""
     entries = {}
     log(f"Обработка {len(torrents)} торрентов")
+    
+    # Нормализуем base_url (убираем завершающий слэш)
+    base_url = base_url.rstrip("/")
+    log_verbose(f"Base URL для .strm файлов: {base_url}")
     
     for idx, tor in enumerate(torrents):
         if not isinstance(tor, dict):
@@ -221,14 +225,19 @@ def build_strm_entries(torrents):
                 rel_path = os.path.join(category, base + ".strm")
                 log_verbose(f"Торрент #{idx}, файл #{file_id}: относительный путь -> '{rel_path}'")
 
-                entries[rel_path] = f"play/{info_hash}/{file_id}"
+                # Формируем полный URL для .strm файла
+                strm_url = f"{base_url}/play/{info_hash}/{file_id}"
+                log_verbose(f"Торрент #{idx}, файл #{file_id}: URL -> '{strm_url}'")
+                entries[rel_path] = strm_url
         else:
             torrent_folder = safe_name(title, info_hash)
             rel_path = os.path.join(
                 category, torrent_folder, safe_name(title, info_hash) + ".strm"
             )
             log_verbose(f"Торрент #{idx}: без file_stats, создаем '{rel_path}'")
-            entries[rel_path] = f"play/{info_hash}/1"
+            strm_url = f"{base_url}/play/{info_hash}/1"
+            log_verbose(f"Торрент #{idx}: URL -> '{strm_url}'")
+            entries[rel_path] = strm_url
     
     log(f"Создано записей для .strm файлов: {len(entries)}")
     return entries
@@ -409,7 +418,7 @@ def main():
             torrents = fetch_torrents(
                 args.api_url, args.username, args.password, args.timeout
             )
-            entries = build_strm_entries(torrents)
+            entries = build_strm_entries(torrents, args.api_url)
             sync_strm_files(entries, output_dir, args.cleanup)
             log(f"Синхронизация #{sync_count} завершена успешно")
         except urllib.error.HTTPError as exc:
