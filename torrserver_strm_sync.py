@@ -157,6 +157,22 @@ def fetch_torrents(api_url: str, username: str, password: str, timeout: int):
     return result
 
 
+def extract_files_from_data(data_value):
+    """Извлекает список файлов из поля data (JSON строка)."""
+    if not data_value:
+        return []
+    if isinstance(data_value, dict):
+        data_obj = data_value
+    else:
+        try:
+            data_obj = json.loads(data_value)
+        except (TypeError, json.JSONDecodeError):
+            return []
+    torrserver = data_obj.get("TorrServer") if isinstance(data_obj, dict) else None
+    files = torrserver.get("Files") if isinstance(torrserver, dict) else None
+    return files if isinstance(files, list) else []
+
+
 def build_strm_entries(torrents):
     """Построение структуры .strm файлов из списка торрентов"""
     entries = {}
@@ -178,34 +194,36 @@ def build_strm_entries(torrents):
         
         title = tor.get("title") or tor.get("name") or info_hash
         log_verbose(f"Торрент #{idx}: title='{title}', name='{tor.get('name')}'")
-        
-        torrent_folder = safe_name(title, info_hash)
-        log_verbose(f"Торрент #{idx}: папка торрента -> '{torrent_folder}'")
-        
+
         file_stats = tor.get("file_stats") or []
+        if not file_stats:
+            file_stats = extract_files_from_data(tor.get("data"))
+            if file_stats:
+                log_verbose(f"Торрент #{idx}: file_stats пуст, используем data.Files: {len(file_stats)}")
         log_verbose(f"Торрент #{idx}: файлов в торренте: {len(file_stats)}")
-        
+
         if file_stats:
             for file_idx, file_stat in enumerate(file_stats):
                 if not isinstance(file_stat, dict):
                     log(f"Торрент #{idx}, файл #{file_idx}: пропущен (не словарь)", "WARN")
                     continue
-                
+
                 file_id = file_stat.get("id")
                 if file_id is None:
                     log(f"Торрент #{idx}, файл #{file_idx}: пропущен (нет id)", "WARN")
                     continue
-                
+
                 file_path_raw = file_stat.get("path") or str(file_id)
                 file_path = safe_path(file_path_raw)
                 log_verbose(f"Торрент #{idx}, файл #{file_id}: путь '{file_path_raw}' -> '{file_path}'")
-                
+
                 base, _ext = os.path.splitext(file_path)
-                rel_path = os.path.join(category, torrent_folder, base + ".strm")
+                rel_path = os.path.join(category, base + ".strm")
                 log_verbose(f"Торрент #{idx}, файл #{file_id}: относительный путь -> '{rel_path}'")
-                
+
                 entries[rel_path] = f"play/{info_hash}/{file_id}"
         else:
+            torrent_folder = safe_name(title, info_hash)
             rel_path = os.path.join(
                 category, torrent_folder, safe_name(title, info_hash) + ".strm"
             )
