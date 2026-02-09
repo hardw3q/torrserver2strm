@@ -1,0 +1,15 @@
+[Unit]
+Description=TorrServer STRM sync service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=torrserver
+WorkingDirectory=/opt/torrserver/scripts
+ExecStart=/usr/bin/python3 /opt/torrserver/scripts/torrserver_strm_sync.py --api-url http://127.0.0.1:8090 --output-dir /mnt/media/strm
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
