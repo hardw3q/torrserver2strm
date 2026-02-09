@@ -206,7 +206,8 @@ def build_strm_entries(torrents, base_url: str):
                 log_verbose(f"Торрент #{idx}: file_stats пуст, используем data.Files: {len(file_stats)}")
         log_verbose(f"Торрент #{idx}: файлов в торренте: {len(file_stats)}")
 
-        if file_stats:
+        # Создаем .strm файлы только если есть реальные файлы в торренте
+        if file_stats and len(file_stats) > 0:
             for file_idx, file_stat in enumerate(file_stats):
                 if not isinstance(file_stat, dict):
                     log(f"Торрент #{idx}, файл #{file_idx}: пропущен (не словарь)", "WARN")
@@ -230,6 +231,8 @@ def build_strm_entries(torrents, base_url: str):
                 log_verbose(f"Торрент #{idx}, файл #{file_id}: URL -> '{strm_url}'")
                 entries[rel_path] = strm_url
         else:
+            # Fallback: создаем один файл только если действительно нет файлов в торренте
+            log_verbose(f"Торрент #{idx}: нет file_stats и data.Files, создаем fallback файл")
             torrent_folder = safe_name(title, info_hash)
             rel_path = os.path.join(
                 category, torrent_folder, safe_name(title, info_hash) + ".strm"
@@ -309,27 +312,56 @@ def sync_strm_files(entries, output_dir: str, cleanup: bool):
     
     log(f"Создано файлов: {created_count}, обновлено: {updated_count}, пропущено: {skipped_count}")
     
+    # Cleanup для удаления файлов удаленных торрентов
     if not cleanup:
+        log_verbose("Cleanup отключен, пропуск удаления устаревших файлов")
         return
     
     log("Проверка на удаление устаревших файлов...")
     removed_count = 0
-    for root, _dirs, files in os.walk(output_dir):
+    removed_dirs = set()
+    
+    # Собираем все существующие .strm файлы
+    for root, dirs, files in os.walk(output_dir):
         for name in files:
             if not name.lower().endswith(".strm"):
                 continue
             abs_path = os.path.normpath(os.path.join(root, name))
             if abs_path not in desired_paths:
-                log_verbose(f"Удаление устаревшего файла: {abs_path}")
+                log(f"Удаление устаревшего файла: {abs_path}")
                 try:
                     os.remove(abs_path)
                     removed_count += 1
+                    # Запоминаем директорию для возможного удаления
+                    removed_dirs.add(root)
                 except OSError as e:
                     log(f"Ошибка удаления файла '{abs_path}': {e}", "WARN")
                     continue
     
     if removed_count > 0:
         log(f"Удалено устаревших файлов: {removed_count}")
+    
+    # Удаляем пустые директории (начиная с самых глубоких)
+    if removed_dirs:
+        log("Проверка пустых директорий для удаления...")
+        dirs_to_check = sorted(removed_dirs, key=lambda x: x.count(os.sep), reverse=True)
+        removed_empty_dirs = 0
+        
+        for dir_path in dirs_to_check:
+            try:
+                # Проверяем что директория пуста (нет файлов и поддиректорий)
+                if os.path.exists(dir_path) and not os.listdir(dir_path):
+                    # Проверяем что это не корневая директория категории
+                    rel_dir = os.path.relpath(dir_path, output_dir)
+                    if rel_dir and rel_dir != "." and not rel_dir.startswith(".."):
+                        log_verbose(f"Удаление пустой директории: {dir_path}")
+                        os.rmdir(dir_path)
+                        removed_empty_dirs += 1
+            except OSError as e:
+                log_verbose(f"Не удалось удалить директорию '{dir_path}': {e}")
+        
+        if removed_empty_dirs > 0:
+            log(f"Удалено пустых директорий: {removed_empty_dirs}")
 
 
 def parse_args():
@@ -363,8 +395,15 @@ def parse_args():
     parser.add_argument(
         "--cleanup",
         action="store_true",
-        help="Remove .strm files that are no longer in TorrServer list.",
+        help="Remove .strm files that are no longer in TorrServer list (default: enabled).",
     )
+    parser.add_argument(
+        "--no-cleanup",
+        dest="cleanup",
+        action="store_false",
+        help="Disable cleanup of removed torrents' .strm files.",
+    )
+    parser.set_defaults(cleanup=True)
     parser.add_argument(
         "--once",
         action="store_true",
@@ -396,6 +435,7 @@ def main():
     log(f"Output directory: {args.output_dir}")
     log(f"Interval: {args.interval}s")
     log(f"Verbose: {VERBOSE}")
+    log(f"Cleanup enabled: {args.cleanup}")
     log(f"ASCII-only names (LANG=C or --ascii-names): {_use_ascii_names()}")
     log("=" * 60)
     
